@@ -16,6 +16,10 @@ const REDIRECT_URI = process.env.SLACK_REDIRECT_URI;
 const TZ = process.env.TZ || 'Asia/Seoul';
 process.env.TZ = TZ;
 
+console.log('[ENV] SLACK_BOT_TOKEN:', TOKEN ? TOKEN.substring(0, 10) + '...' : '❌ 없음');
+console.log('[ENV] SLACK_CLIENT_ID:', CLIENT_ID ? CLIENT_ID.substring(0, 6) + '...' : '❌ 없음');
+console.log('[ENV] SLACK_REDIRECT_URI:', REDIRECT_URI || '❌ 없음');
+
 if (!TOKEN || !TOKEN.startsWith('xoxb-')) {
   console.error('\n❌ SLACK_BOT_TOKEN 이(가) 설정되지 않았습니다.');
   console.error('   .env 파일을 만들고 SLACK_BOT_TOKEN=xoxb-... 형식으로 입력해주세요.\n');
