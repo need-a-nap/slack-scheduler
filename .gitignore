@@ -6,5 +6,7 @@ send_log.json
 send_log.json.tmp
 user_config.json
 user_config.json.tmp
+users.json
+users.json.tmp
 *.log
 .DS_Store
