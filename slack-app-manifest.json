@@ -12,7 +12,7 @@
   },
   "oauth_config": {
     "redirect_urls": [
-      "https://YOUR-APP.railway.app/slack/oauth_redirect"
+      "https://slack-scheduler.up.railway.app/slack/oauth_redirect"
     ],
     "scopes": {
       "bot": [
