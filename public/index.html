@@ -591,12 +591,18 @@
 
         useEffect(() => {
           (async () => {
+            const params = new URLSearchParams(window.location.search);
+            const authError = params.get('auth_error');
+            if (authError) {
+              showNotification(authError, 'error');
+              window.history.replaceState({}, '', '/');
+            }
             try { const a = await api.auth(); if (a.ok) setWorkspace(a); } catch {}
             await checkUserSession();
             await refresh();
             setLoading(false);
           })();
-        }, [refresh, checkUserSession]);
+        }, [refresh, checkUserSession, showNotification]);
 
         // 슬랙 로그인 (OAuth) 팝업 / 리다이렉트 처리
         const handleSlackLogin = () => {

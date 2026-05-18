@@ -136,9 +136,7 @@ const pendingStates = new Set();
 
 app.get('/api/auth/slack', (req, res) => {
   if (!CLIENT_ID || !REDIRECT_URI) {
-    return res.status(500).send(
-      '<p>SLACK_CLIENT_ID 또는 SLACK_REDIRECT_URI 환경변수가 설정되지 않았습니다.</p>'
-    );
+    return res.redirect('/?auth_error=' + encodeURIComponent('SLACK_CLIENT_ID 또는 SLACK_REDIRECT_URI 환경변수가 설정되지 않았습니다. .env 파일을 확인해주세요.'));
   }
   const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   pendingStates.add(state);
