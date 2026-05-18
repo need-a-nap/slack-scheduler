@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Slack Scheduler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { font-family: 'Noto Sans KR', sans-serif; }
+      @keyframes fade-in-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-fade-in-up { animation: fade-in-up 0.2s ease-out; }
+      input[type='date']::-webkit-calendar-picker-indicator,
+      input[type='time']::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+      .scrollbar::-webkit-scrollbar { width: 8px; }
+      .scrollbar::-webkit-scrollbar-track { background: #111827; }
+      .scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+    </style>
+  </head>
+  <body class="bg-gray-950">
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react">
+      const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+      // ───── Icons ─────────────────────────────────────────────
+      const svgBase = { fill:'none', stroke:'currentColor', strokeWidth:2, strokeLinecap:'round', strokeLinejoin:'round', viewBox:'0 0 24 24' };
+      const mkIcon = (children) => ({ size = 24, className = '' }) =>
+        React.createElement('svg', { width: size, height: size, className, ...svgBase }, children);
+
+      const Settings = mkIcon([<circle key="c" cx="12" cy="12" r="3" />, <path key="p" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />]);
+      const MessageSquare = mkIcon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />);
+      const Clock = mkIcon([<circle key="c" cx="12" cy="12" r="10" />, <polyline key="p" points="12 6 12 12 16 14" />]);
+      const Calendar = mkIcon([<rect key="r" x="3" y="4" width="18" height="18" rx="2" ry="2" />, <line key="l1" x1="16" y1="2" x2="16" y2="6" />, <line key="l2" x1="8" y1="2" x2="8" y2="6" />, <line key="l3" x1="3" y1="10" x2="21" y2="10" />]);
+      const CheckCircle2 = mkIcon([<circle key="c" cx="12" cy="12" r="10" />, <path key="p" d="m9 12 2 2 4-4" />]);
+      const Trash2 = mkIcon([<polyline key="p1" points="3 6 5 6 21 6" />, <path key="p2" d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />, <path key="p3" d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />, <line key="l1" x1="10" y1="11" x2="10" y2="17" />, <line key="l2" x1="14" y1="11" x2="14" y2="17" />]);
+      const Send = mkIcon([<line key="l" x1="22" y1="2" x2="11" y2="13" />, <polygon key="p" points="22 2 15 22 11 13 2 9 22 2" />]);
+      const Plus = mkIcon([<line key="l1" x1="12" y1="5" x2="12" y2="19" />, <line key="l2" x1="5" y1="12" x2="19" y2="12" />]);
+      const Users = mkIcon([<path key="p1" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />, <circle key="c" cx="9" cy="7" r="4" />, <path key="p2" d="M23 21v-2a4 4 0 0 0-3-3.87" />, <path key="p3" d="M16 3.13a4 4 0 0 1 0 7.75" />]);
+      const Hash = mkIcon([<line key="l1" x1="4" y1="9" x2="20" y2="9" />, <line key="l2" x1="4" y1="15" x2="20" y2="15" />, <line key="l3" x1="10" y1="3" x2="8" y2="21" />, <line key="l4" x1="16" y1="3" x2="14" y2="21" />]);
+      const Play = mkIcon(<polygon points="5 3 19 12 5 21 5 3" />);
+      const Pause = mkIcon([<rect key="r1" x="6" y="4" width="4" height="16" />, <rect key="r2" x="14" y="4" width="4" height="16" />]);
+      const Repeat = mkIcon([<polyline key="p1" points="17 1 21 5 17 9" />, <path key="p2" d="M3 11V9a4 4 0 0 1 4-4h14" />, <polyline key="p3" points="7 23 3 19 7 15" />, <path key="p4" d="M21 13v2a4 4 0 0 1-4 4H3" />]);
+      const X = mkIcon([<line key="l1" x1="18" y1="6" x2="6" y2="18" />, <line key="l2" x1="6" y1="6" x2="18" y2="18" />]);
+      const Link2 = mkIcon([<path key="p1" d="M9 17H7A5 5 0 0 1 7 7h2" />, <path key="p2" d="M15 7h2a5 5 0 1 1 0 10h-2" />, <line key="l" x1="8" y1="12" x2="16" y2="12" />]);
+
+      // ───── API ──────────────────────────────────────────────
+      const api = {
+        async list() { const r = await fetch('/api/schedules'); if (!r.ok) throw new Error('목록 조회 실패'); return r.json(); },
+        async create(p) { const r = await fetch('/api/schedules', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); if (!r.ok) throw new Error((await r.json()).error || '생성 실패'); return r.json(); },
+        async remove(id) { const r = await fetch('/api/schedules/'+id, { method:'DELETE' }); if (!r.ok) throw new Error('삭제 실패'); },
+        async toggle(id) { const r = await fetch('/api/schedules/'+id+'/toggle', { method:'PATCH' }); if (!r.ok) throw new Error((await r.json()).error || '상태 변경 실패'); return r.json(); },
+        async testSend(p) { const r = await fetch('/api/test-send', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || '전송 실패'); return d; },
+        async auth() { const r = await fetch('/api/auth'); return r.json(); },
+        async channels(refresh=false) { const r = await fetch('/api/slack/channels' + (refresh?'?refresh=1':'')); if (!r.ok) throw new Error((await r.json()).error || '채널 목록 조회 실패'); return r.json(); },
+        async users(refresh=false) { const r = await fetch('/api/slack/users' + (refresh?'?refresh=1':'')); if (!r.ok) throw new Error((await r.json()).error || '사용자 목록 조회 실패'); return r.json(); },
+      };
+
+      // ───── ChannelUserPicker: multi-select with Slack data ─────
+      function ChannelUserPicker({ selected, onChange, onError }) {
+        const [channels, setChannels] = useState([]);
+        const [users, setUsers] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [open, setOpen] = useState(false);
+        const [query, setQuery] = useState('');
+        const containerRef = useRef(null);
+        const inputRef = useRef(null);
+
+        useEffect(() => {
+          Promise.all([api.channels(), api.users()])
+            .then(([ch, us]) => { setChannels(ch); setUsers(us); })
+            .catch((e) => onError && onError(e.message))
+            .finally(() => setLoading(false));
+        }, []);
+
+        useEffect(() => {
+          if (!open) return;
+          const handler = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
+          document.addEventListener('mousedown', handler);
+          return () => document.removeEventListener('mousedown', handler);
+        }, [open]);
+
+        const isSelected = (id) => selected.some((s) => s.id === id);
+
+        const add = (item) => {
+          if (isSelected(item.id)) return;
+          onChange([...selected, item]);
+          setQuery('');
+          inputRef.current?.focus();
+        };
+        const remove = (id) => onChange(selected.filter((s) => s.id !== id));
+
+        const q = query.toLowerCase().trim();
+        const filteredChannels = channels
+          .filter((c) => !isSelected(c.id) && (q === '' || c.name.toLowerCase().includes(q)))
+          .slice(0, 50);
+        const filteredUsers = users
+          .filter((u) => !isSelected(u.id) && (q === '' ||
+            u.displayName.toLowerCase().includes(q) ||
+            u.name.toLowerCase().includes(q) ||
+            (u.realName && u.realName.toLowerCase().includes(q))))
+          .slice(0, 50);
+
+        return (
+          <div className="relative" ref={containerRef}>
+            <div
+              className="min-h-[44px] flex flex-wrap items-center gap-1.5 p-2 border border-gray-700 bg-gray-950 rounded-lg focus-within:ring-1 focus-within:ring-pink-500 focus-within:border-pink-500 cursor-text"
+              onClick={() => { setOpen(true); inputRef.current?.focus(); }}
+            >
+              {selected.map((item) => (
+                <span
+                  key={item.id}
+                  className={
+                    'inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-md text-xs font-medium ' +
+                    (item.type === 'channel'
+                      ? 'bg-blue-900/40 text-blue-300 border border-blue-800/60'
+                      : 'bg-green-900/40 text-green-300 border border-green-800/60')
+                  }
+                >
+                  {item.type === 'channel' ? <Hash size={12} /> : <Users size={12} />}
+                  <span>{item.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); remove(item.id); }}
+                    className="hover:bg-black/30 rounded p-0.5 ml-0.5"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                onFocus={() => setOpen(true)}
+                placeholder={selected.length === 0 ? '채널이나 사람을 검색하세요...' : '추가하려면 검색...'}
+                className="flex-1 min-w-[140px] bg-transparent outline-none text-sm text-gray-200 placeholder-gray-600 py-1 px-1"
+              />
+            </div>
+
+            {open && (
+              <div className="scrollbar absolute z-20 left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl max-h-80 overflow-y-auto">
+                {loading ? (
+                  <div className="p-4 text-center text-sm text-gray-500">슬랙에서 목록을 가져오는 중...</div>
+                ) : filteredChannels.length === 0 && filteredUsers.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500">
+                    {channels.length + users.length === 0 ? '데이터를 불러올 수 없습니다.' : '검색 결과 없음'}
+                  </div>
+                ) : (
+                  <>
+                    {filteredChannels.length > 0 && (
+                      <div>
+                        <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-950/50 border-b border-gray-800 sticky top-0">채널</div>
+                        {filteredChannels.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => add({ type:'channel', id:c.id, name:c.name })}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center gap-2 text-sm text-gray-300"
+                          >
+                            <Hash size={14} className="text-blue-400 shrink-0" />
+                            <span className="truncate">{c.name}</span>
+                            {c.isPrivate && <span className="text-xs text-gray-500 shrink-0">(비공개)</span>}
+                            {!c.isMember && (
+                              <span className="text-xs text-yellow-500/80 ml-auto shrink-0" title="공개 채널은 봇 초대 없이도 전송 가능합니다.">
+                                {c.isPrivate ? '⚠ 봇 미초대' : '봇 미초대'}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {filteredUsers.length > 0 && (
+                      <div>
+                        <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-950/50 border-b border-gray-800 sticky top-0">사람</div>
+                        {filteredUsers.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => add({ type:'user', id:u.id, name:u.displayName })}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center gap-2 text-sm text-gray-300"
+                          >
+                            {u.avatar ? (
+                              <img src={u.avatar} className="w-5 h-5 rounded shrink-0" alt="" />
+                            ) : (
+                              <div className="w-5 h-5 rounded bg-green-900/40 flex items-center justify-center shrink-0">
+                                <Users size={12} className="text-green-400" />
+                              </div>
+                            )}
+                            <span className="truncate">{u.displayName}</span>
+                            {u.realName && u.realName !== u.displayName && (
+                              <span className="text-xs text-gray-500 truncate">· {u.realName}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ───── FormatToolbar: Slack-style text formatting ─────
+      function FormatToolbar({ value, onChange, textareaRef }) {
+        const restoreFocus = (start, length) => {
+          setTimeout(() => {
+            const ta = textareaRef.current;
+            if (!ta) return;
+            ta.focus();
+            ta.setSelectionRange(start, start + length);
+          }, 0);
+        };
+
+        const wrap = (before, after = before, placeholder = '텍스트') => {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const selected = value.substring(start, end);
+          const inner = selected || placeholder;
+          const newValue = value.substring(0, start) + before + inner + after + value.substring(end);
+          onChange(newValue);
+          restoreFocus(start + before.length, inner.length);
+        };
+
+        const prefixLines = (prefixFn) => {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+          const searchFrom = end > start && value[end - 1] === '\n' ? end - 1 : end;
+          const nextNewline = value.indexOf('\n', searchFrom);
+          const lineEnd = nextNewline === -1 ? value.length : nextNewline;
+          const block = value.substring(lineStart, lineEnd);
+          const lines = block.split('\n');
+          const prefixed = lines.map((line, i) => prefixFn(line, i)).join('\n');
+          const newValue = value.substring(0, lineStart) + prefixed + value.substring(lineEnd);
+          onChange(newValue);
+          restoreFocus(lineStart, prefixed.length);
+        };
+
+        const insertLink = () => {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const selected = value.substring(start, end);
+          const url = window.prompt('URL을 입력하세요:', 'https://');
+          if (!url) return;
+          const text = selected || window.prompt('표시할 텍스트 (비워두면 URL 그대로):', '') || '';
+          const link = text ? `<${url}|${text}>` : `<${url}>`;
+          const newValue = value.substring(0, start) + link + value.substring(end);
+          onChange(newValue);
+          restoreFocus(start + link.length, 0);
+        };
+
+        const btn = 'min-w-[28px] h-8 px-2 text-gray-400 hover:text-pink-400 hover:bg-gray-800 rounded text-sm font-medium transition-colors flex items-center justify-center';
+        const divider = <div className="w-px h-5 bg-gray-700 mx-0.5" />;
+
+        return (
+          <div className="flex items-center gap-0.5 px-2 py-1.5 bg-gray-900 border border-gray-700 rounded-t-lg border-b-0 flex-wrap">
+            <button type="button" className={btn + ' font-bold'} onClick={() => wrap('*')} title="굵게 (*텍스트*)">B</button>
+            <button type="button" className={btn + ' italic'} onClick={() => wrap('_')} title="기울임 (_텍스트_)"><span style={{fontFamily:'serif'}}>I</span></button>
+            <button type="button" className={btn + ' line-through'} onClick={() => wrap('~')} title="취소선 (~텍스트~)">S</button>
+            {divider}
+            <button type="button" className={btn + ' font-mono'} onClick={() => wrap('`')} title="인라인 코드">&lt;/&gt;</button>
+            <button type="button" className={btn + ' font-mono text-xs'} onClick={() => wrap('```\n', '\n```', '코드')} title="코드 블록">{'{ }'}</button>
+            <button type="button" className={btn} onClick={insertLink} title="링크 삽입"><Link2 size={14} /></button>
+            {divider}
+            <button type="button" className={btn} onClick={() => prefixLines((l) => '> ' + l)} title="인용">”</button>
+            <button type="button" className={btn} onClick={() => prefixLines((l) => '• ' + l)} title="글머리 기호">•</button>
+            <button type="button" className={btn + ' text-xs'} onClick={() => prefixLines((l, i) => (i + 1) + '. ' + l)} title="번호 매기기">1.</button>
+            <div className="ml-auto text-xs text-gray-600 pr-1 hidden sm:block">Slack 마크다운</div>
+          </div>
+        );
+      }
+
+      // ───── Helpers ──────────────────────────────────────────
+      const DAYS = [
+        { id:'1', label:'월' }, { id:'2', label:'화' }, { id:'3', label:'수' },
+        { id:'4', label:'목' }, { id:'5', label:'금' }, { id:'6', label:'토' }, { id:'0', label:'일' },
+      ];
+
+      function formatDaysDisplay(selectedDays) {
+        if (selectedDays.length === 7) return '매일';
+        if (selectedDays.length === 5 && !selectedDays.includes('0') && !selectedDays.includes('6')) return '평일';
+        if (selectedDays.length === 2 && selectedDays.includes('0') && selectedDays.includes('6')) return '주말';
+        const order = ['1','2','3','4','5','6','0'];
+        return [...selectedDays].sort((a,b) => order.indexOf(a) - order.indexOf(b))
+          .map((id) => DAYS.find((d) => d.id === id)?.label).join(',');
+      }
+
+      function formatOnceDate(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        const dn = ['일','월','화','수','목','금','토'][d.getDay()];
+        return `${d.getMonth() + 1}월 ${d.getDate()}일(${dn})`;
+      }
+
+      function todayStr() {
+        const n = new Date();
+        return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+      }
+
+      // ───── Schedule card ────────────────────────────────────
+      function ScheduleCard({ msg, onToggle, onDelete }) {
+        const isOnce = msg.scheduleType === 'once';
+        const statusInfo = msg.status === 'completed'
+          ? { cls:'bg-gray-700/50 text-gray-400 border-gray-700', label:'완료' }
+          : msg.status === 'active'
+            ? { cls:'bg-green-900/30 text-green-400 border-green-900/50', label:'활성' }
+            : { cls:'bg-yellow-900/30 text-yellow-400 border-yellow-900/50', label:'일시정지' };
+
+        return (
+          <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 p-5 hover:border-gray-700 transition-colors">
+            <div className="flex justify-between items-start mb-3 gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className={'px-2 py-0.5 rounded-md text-xs font-medium flex items-center gap-1 ' + (isOnce ? 'bg-purple-900/30 text-purple-300 border border-purple-900/50' : 'bg-pink-900/30 text-pink-300 border border-pink-900/50')}>
+                    {isOnce ? <Calendar size={11} /> : <Repeat size={11} />}
+                    {isOnce ? '한 번' : '반복'}
+                  </span>
+                  <span className={'px-2 py-0.5 rounded-full text-xs font-medium border ' + statusInfo.cls}>
+                    {statusInfo.label}
+                  </span>
+                  {msg.sentCount > 0 && (
+                    <span className="text-xs text-gray-500">· {msg.sentCount}회 발송</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                  <span className="text-xs text-gray-500 mr-1">받는 사람:</span>
+                  {msg.targets.slice(0, 5).map((t) => (
+                    <span
+                      key={t.id}
+                      className={
+                        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ' +
+                        (t.type === 'channel' ? 'bg-blue-900/30 text-blue-300' : 'bg-green-900/30 text-green-300')
+                      }
+                    >
+                      {t.type === 'channel' ? <Hash size={10} /> : <Users size={10} />}
+                      {t.name}
+                    </span>
+                  ))}
+                  {msg.targets.length > 5 && (
+                    <span className="text-xs text-gray-500">외 {msg.targets.length - 5}곳</span>
+                  )}
+                </div>
+
+                <p className="text-sm text-gray-400 flex items-center gap-1 flex-wrap">
+                  <Clock size={13} />
+                  {isOnce ? (
+                    <span>{formatOnceDate(msg.date)} {msg.time}</span>
+                  ) : (
+                    <>
+                      <span>{msg.time} ({formatDaysDisplay(msg.daysOfWeek)})</span>
+                      <span className="text-gray-600 mx-1">·</span>
+                      <span>{msg.startDate} ~ {msg.endDate}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="flex space-x-1 shrink-0">
+                {msg.status !== 'completed' && (
+                  <button
+                    onClick={() => onToggle(msg.id)}
+                    className="p-2 text-gray-500 hover:text-pink-500 hover:bg-gray-800 rounded-lg transition-colors"
+                    title={msg.status === 'active' ? '일시정지' : '활성화'}
+                  >
+                    {msg.status === 'active' ? <Pause size={18} /> : <Play size={18} />}
+                  </button>
+                )}
+                <button
+                  onClick={() => onDelete(msg.id)}
+                  className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                  title="삭제"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 text-gray-300 text-sm whitespace-pre-wrap">
+              {msg.messageText}
+            </div>
+          </div>
+        );
+      }
+
+      // ───── Main app ─────────────────────────────────────────
+      function SlackSchedulerBot() {
+        const [activeTab, setActiveTab] = useState('dashboard');
+        const [scheduledMessages, setScheduledMessages] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [workspace, setWorkspace] = useState(null);
+
+        const [scheduleType, setScheduleType] = useState('recurring');
+        const [targets, setTargets] = useState([]);
+        const [messageText, setMessageText] = useState('');
+        const [date, setDate] = useState('');
+        const [startDate, setStartDate] = useState('');
+        const [endDate, setEndDate] = useState('');
+        const [time, setTime] = useState('');
+        const [daysOfWeek, setDaysOfWeek] = useState([]);
+        const [submitting, setSubmitting] = useState(false);
+        const textareaRef = useRef(null);
+
+        const [toastMessage, setToastMessage] = useState('');
+        const [toastType, setToastType] = useState('success');
+        const [showToast, setShowToast] = useState(false);
+
+        const showNotification = useCallback((message, type = 'success') => {
+          setToastMessage(message); setToastType(type); setShowToast(true);
+          setTimeout(() => setShowToast(false), 3500);
+        }, []);
+
+        const refresh = useCallback(async () => {
+          try { setScheduledMessages(await api.list()); }
+          catch (e) { showNotification(e.message, 'error'); }
+        }, [showNotification]);
+
+        useEffect(() => {
+          (async () => {
+            try { const a = await api.auth(); if (a.ok) setWorkspace(a); } catch {}
+            await refresh();
+            setLoading(false);
+          })();
+        }, [refresh]);
+
+        const resetForm = () => {
+          setTargets([]); setMessageText('');
+          setDate(''); setStartDate(''); setEndDate(''); setTime('');
+          setDaysOfWeek([]); setScheduleType('recurring');
+        };
+
+        const handleScheduleMessage = async (e) => {
+          e.preventDefault();
+          if (targets.length === 0) return showNotification('받는 대상을 1명/1채널 이상 선택해주세요.', 'error');
+          if (!messageText) return showNotification('메시지 내용을 입력해주세요.', 'error');
+          if (!time) return showNotification('전송 시간을 선택해주세요.', 'error');
+          if (scheduleType === 'once') {
+            if (!date) return showNotification('날짜를 선택해주세요.', 'error');
+          } else {
+            if (!startDate || !endDate) return showNotification('시작일과 종료일을 선택해주세요.', 'error');
+            if (endDate < startDate) return showNotification('종료일이 시작일보다 빠를 수 없습니다.', 'error');
+            if (daysOfWeek.length === 0) return showNotification('반복 요일을 선택해주세요.', 'error');
+          }
+
+          setSubmitting(true);
+          try {
+            const payload = { scheduleType, targets, messageText, time,
+              ...(scheduleType === 'once' ? { date } : { startDate, endDate, daysOfWeek }) };
+            await api.create(payload);
+            resetForm();
+            await refresh();
+            showNotification('메시지가 성공적으로 예약되었습니다.', 'success');
+            setActiveTab('dashboard');
+          } catch (err) { showNotification(err.message, 'error'); }
+          finally { setSubmitting(false); }
+        };
+
+        const toggleDay = (id) =>
+          setDaysOfWeek((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
+
+        const handleDelete = async (id) => {
+          if (!window.confirm('이 예약을 삭제할까요?')) return;
+          try { await api.remove(id); await refresh(); showNotification('예약이 삭제되었습니다.'); }
+          catch (e) { showNotification(e.message, 'error'); }
+        };
+
+        const toggleStatus = async (id) => {
+          try { await api.toggle(id); await refresh(); }
+          catch (e) { showNotification(e.message, 'error'); }
+        };
+
+        const handleTestSend = async () => {
+          if (targets.length === 0) return showNotification('받는 대상을 먼저 선택해주세요.', 'error');
+          if (!messageText) return showNotification('메시지 내용을 입력해주세요.', 'error');
+          try {
+            const r = await api.testSend({ targets, messageText });
+            const failed = (r.results || []).filter((x) => !x.success);
+            if (failed.length === 0) showNotification(`테스트 메시지를 ${targets.length}곳에 보냈습니다.`);
+            else showNotification(`${targets.length - failed.length}곳 성공, ${failed.length}곳 실패 (${failed.map(f=>f.error).join(', ')})`, 'error');
+          } catch (e) { showNotification('전송 실패: ' + e.message, 'error'); }
+        };
+
+        // Stats
+        const stats = useMemo(() => ({
+          total: scheduledMessages.length,
+          active: scheduledMessages.filter((m) => m.status === 'active').length,
+          sentTotal: scheduledMessages.reduce((acc, m) => acc + (m.sentCount || 0), 0),
+        }), [scheduledMessages]);
+
+        const renderDashboard = () => (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-100">예약된 메시지 목록</h2>
+              <button onClick={() => setActiveTab('new')} className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg flex items-center text-sm transition-colors shadow-sm">
+                <Plus size={16} className="mr-2" />새 메시지 예약
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="bg-gray-900 rounded-xl border border-gray-800 p-12 text-center text-gray-400">불러오는 중...</div>
+            ) : scheduledMessages.length === 0 ? (
+              <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 p-12 text-center">
+                <div className="w-16 h-16 bg-gray-950 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-800">
+                  <Calendar size={28} className="text-pink-500" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-200 mb-2">예약된 메시지가 없습니다</h3>
+                <p className="text-gray-400 mb-6">첫 번째 슬랙 메시지 예약을 생성해보세요.</p>
+                <button onClick={() => setActiveTab('new')} className="text-pink-500 font-medium hover:text-pink-400 transition-colors">예약 만들기 &rarr;</button>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {scheduledMessages.map((msg) => (
+                  <ScheduleCard key={msg.id} msg={msg} onToggle={toggleStatus} onDelete={handleDelete} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+        const renderNewSchedule = () => (
+          <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 overflow-hidden">
+            <div className="border-b border-gray-800 px-6 py-4 bg-gray-900/50">
+              <h2 className="text-lg font-semibold text-gray-100">새 메시지 예약</h2>
+              <p className="text-sm text-gray-400 mt-1">받는 사람을 골라 기간과 시간을 설정하세요.</p>
+            </div>
+
+            <form onSubmit={handleScheduleMessage} className="p-6 space-y-6">
+              {/* 예약 종류 */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">예약 종류</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { v:'once', icon: Calendar, label:'한 번만', desc:'특정 날짜에 한 번 보내기' },
+                    { v:'recurring', icon: Repeat, label:'반복', desc:'기간 동안 요일별로 반복' },
+                  ].map(({ v, icon: I, label, desc }) => (
+                    <label key={v} className={'flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ' + (scheduleType === v ? 'bg-gray-800 border-pink-500/50' : 'bg-gray-950 border-gray-700 hover:bg-gray-800')}>
+                      <input type="radio" name="scheduleType" value={v} checked={scheduleType === v} onChange={() => setScheduleType(v)} className="w-4 h-4 mt-0.5 text-pink-600 focus:ring-pink-500 bg-gray-900 border-gray-700" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <I size={16} className={scheduleType === v ? 'text-pink-500' : 'text-gray-500'} />
+                          <span className="text-sm font-medium text-gray-200">{label}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 받는 사람 */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">받는 사람 / 채널 <span className="text-gray-500 font-normal">(여러 명 선택 가능)</span></label>
+                <ChannelUserPicker selected={targets} onChange={setTargets} onError={(msg) => showNotification(msg, 'error')} />
+              </div>
+
+              {/* 메시지 */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">메시지 내용</label>
+                <div>
+                  <FormatToolbar value={messageText} onChange={setMessageText} textareaRef={textareaRef} />
+                  <textarea
+                    ref={textareaRef}
+                    rows="5"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    className="shadow-sm focus:ring-pink-500 focus:border-pink-500 block w-full sm:text-sm border-gray-700 bg-gray-950 text-white rounded-b-lg p-3 border border-t-0 resize-none placeholder-gray-600 focus:rounded-t-none"
+                    placeholder="여기에 메시지를 입력하세요. 위 도구로 *굵게*, _기울임_, ~취소선~, `코드` 등을 적용할 수 있습니다."
+                  />
+                </div>
+              </div>
+
+              {/* 시간 설정 */}
+              {scheduleType === 'once' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-800/30 p-4 rounded-xl border border-gray-800">
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-300">날짜</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={16} className="text-gray-500" /></div>
+                      <input type="date" min={todayStr()} value={date} onChange={(e) => setDate(e.target.value)} className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-700 bg-gray-950 text-white rounded-lg p-2.5 border" style={{ colorScheme:'dark' }} />
+                    </div>
+                    <button type="button" onClick={() => setDate(todayStr())} className="text-xs text-pink-400 hover:text-pink-300">오늘로 설정</button>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-300">시간</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Clock size={16} className="text-gray-500" /></div>
+                      <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-700 bg-gray-950 text-white rounded-lg p-2.5 border" style={{ colorScheme:'dark' }} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-800/30 p-4 rounded-xl border border-gray-800">
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-gray-300">시작일</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={16} className="text-gray-500" /></div>
+                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-700 bg-gray-950 text-white rounded-lg p-2.5 border" style={{ colorScheme:'dark' }} />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-gray-300">종료일</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={16} className="text-gray-500" /></div>
+                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-700 bg-gray-950 text-white rounded-lg p-2.5 border" style={{ colorScheme:'dark' }} />
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="block text-sm font-medium text-gray-300">전송 시간</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Clock size={16} className="text-gray-500" /></div>
+                        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-700 bg-gray-950 text-white rounded-lg p-2.5 border" style={{ colorScheme:'dark' }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-gray-300">반복 요일</label>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {DAYS.map((day) => (
+                        <button key={day.id} type="button" onClick={() => toggleDay(day.id)}
+                          className={'w-12 h-12 rounded-full flex items-center justify-center text-sm font-medium transition-all border ' +
+                            (daysOfWeek.includes(day.id)
+                              ? 'bg-pink-600/20 text-pink-400 border-pink-500/50 shadow-md'
+                              : 'bg-gray-950 border-gray-700 text-gray-400 hover:bg-gray-800')}>
+                          {day.label}
+                        </button>
+                      ))}
+                      <button type="button" onClick={() => setDaysOfWeek(['1','2','3','4','5'])} className="px-3 h-12 rounded-full text-xs text-gray-400 border border-gray-800 hover:bg-gray-800 hover:text-pink-400 transition-colors">평일</button>
+                      <button type="button" onClick={() => setDaysOfWeek(['0','6'])} className="px-3 h-12 rounded-full text-xs text-gray-400 border border-gray-800 hover:bg-gray-800 hover:text-pink-400 transition-colors">주말</button>
+                      <button type="button" onClick={() => setDaysOfWeek(['0','1','2','3','4','5','6'])} className="px-3 h-12 rounded-full text-xs text-gray-400 border border-gray-800 hover:bg-gray-800 hover:text-pink-400 transition-colors">매일</button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="pt-4 flex flex-col sm:flex-row sm:justify-between gap-3 border-t border-gray-800">
+                <button type="button" onClick={handleTestSend} className="px-4 py-2 border border-gray-700 text-sm font-medium rounded-lg text-pink-400 bg-gray-900 hover:bg-gray-800 flex items-center justify-center transition-colors">
+                  <Send size={14} className="mr-2" />지금 한 번 보내보기
+                </button>
+                <div className="flex space-x-3">
+                  <button type="button" onClick={() => setActiveTab('dashboard')} className="flex-1 sm:flex-none px-4 py-2 border border-gray-700 shadow-sm text-sm font-medium rounded-lg text-gray-300 bg-gray-900 hover:bg-gray-800 transition-colors">취소</button>
+                  <button type="submit" disabled={submitting} className="flex-1 sm:flex-none px-6 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors">
+                    <Send size={16} className="mr-2" />{submitting ? '저장 중...' : '예약 저장하기'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        );
+
+        return (
+          <div className="min-h-screen bg-gray-950 text-gray-200">
+            <header className="bg-gray-900 shadow-sm border-b border-gray-800 sticky top-0 z-10">
+              <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-pink-600 rounded-lg flex items-center justify-center"><MessageSquare size={18} className="text-white" /></div>
+                  <h1 className="text-xl font-bold text-pink-500">Slack Scheduler</h1>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full font-medium border border-gray-700">
+                    {workspace ? `${workspace.team} · @${workspace.botName}` : '연결 확인 중...'}
+                  </span>
+                  <button className="text-gray-500 hover:text-pink-400 transition-colors"><Settings size={20} /></button>
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="flex flex-col md:flex-row gap-8">
+                <aside className="w-full md:w-64 shrink-0">
+                  <nav className="space-y-1">
+                    <button onClick={() => setActiveTab('dashboard')} className={'w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all ' + (activeTab === 'dashboard' ? 'bg-gray-900 text-pink-400 shadow-sm border border-gray-800' : 'text-gray-400 hover:bg-gray-900/50')}>
+                      <Calendar size={18} className="mr-3" />예약 대시보드
+                    </button>
+                    <button onClick={() => setActiveTab('new')} className={'w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all ' + (activeTab === 'new' ? 'bg-gray-900 text-pink-400 shadow-sm border border-gray-800' : 'text-gray-400 hover:bg-gray-900/50')}>
+                      <Plus size={18} className="mr-3" />새 예약 만들기
+                    </button>
+                  </nav>
+
+                  {scheduledMessages.length > 0 && (
+                    <div className="mt-8 bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                      <h4 className="text-xs font-semibold text-pink-500 uppercase tracking-wider">통계</h4>
+                      <div className="flex justify-between text-sm"><span className="text-gray-400">전체 예약</span><span className="font-medium text-gray-200">{stats.total}건</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-gray-400">활성</span><span className="font-medium text-green-400">{stats.active}건</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-gray-400">총 발송</span><span className="font-medium text-gray-200">{stats.sentTotal}회</span></div>
+                    </div>
+                  )}
+                </aside>
+
+                <div className="flex-1">{activeTab === 'dashboard' ? renderDashboard() : renderNewSchedule()}</div>
+              </div>
+            </main>
+
+            {showToast && (
+              <div className={'fixed bottom-4 right-4 border text-white px-6 py-3 rounded-lg shadow-lg flex items-center z-50 animate-fade-in-up max-w-md ' + (toastType === 'error' ? 'bg-red-900/80 border-red-700' : 'bg-gray-800 border-gray-700')}>
+                <CheckCircle2 size={18} className={'mr-2 shrink-0 ' + (toastType === 'error' ? 'text-red-300' : 'text-green-400')} />
+                <span className="text-sm">{toastMessage}</span>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<SlackSchedulerBot />);
+    </script>
+  </body>
+</html>
