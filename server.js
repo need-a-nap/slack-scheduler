@@ -1,5 +1,5 @@
 /**
- * Slack Scheduler Bot - Backend (v2: multi-target + one-time + slack list)
+ * Slack Scheduler Bot - Backend (v3: OAuth user token support)
  */
 const express = require('express');
 const fs = require('fs');
@@ -10,6 +10,9 @@ require('dotenv').config();
 
 const PORT = process.env.PORT || 3000;
 const TOKEN = process.env.SLACK_BOT_TOKEN;
+const CLIENT_ID = process.env.SLACK_CLIENT_ID;
+const CLIENT_SECRET = process.env.SLACK_CLIENT_SECRET;
+const REDIRECT_URI = process.env.SLACK_REDIRECT_URI;
 const TZ = process.env.TZ || 'Asia/Seoul';
 process.env.TZ = TZ;
 
@@ -24,6 +27,8 @@ const slack = new WebClient(TOKEN);
 // ───── Storage ────────────────────────────────────────────────
 const DATA_FILE = path.join(__dirname, 'schedules.json');
 const LOG_FILE = path.join(__dirname, 'send_log.json');
+const USER_CONFIG_FILE = path.join(__dirname, 'user_config.json');
+
 const loadJSON = (file, fallback) => {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 };
@@ -32,8 +37,11 @@ const saveJSON = (file, data) => {
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
   fs.renameSync(tmp, file);
 };
+
 let schedules = loadJSON(DATA_FILE, []);
 let sendLog = loadJSON(LOG_FILE, []);
+// { userToken, userId, userName, userAvatar } — 내 계정 연동 정보
+let userConfig = loadJSON(USER_CONFIG_FILE, null);
 
 // One-time migration of old single-target schedules
 let migrated = 0;
@@ -72,12 +80,7 @@ async function fetchChannels() {
       exclude_archived: true,
     });
     for (const c of r.channels) {
-      out.push({
-        id: c.id,
-        name: c.name,
-        isPrivate: c.is_private,
-        isMember: c.is_member,
-      });
+      out.push({ id: c.id, name: c.name, isPrivate: c.is_private, isMember: c.is_member });
     }
     cursor = r.response_metadata?.next_cursor;
   } while (cursor);
@@ -95,8 +98,7 @@ async function fetchUsers() {
       out.push({
         id: u.id,
         name: u.name,
-        displayName:
-          u.profile?.display_name_normalized || u.real_name_normalized || u.real_name || u.name,
+        displayName: u.profile?.display_name_normalized || u.real_name_normalized || u.real_name || u.name,
         realName: u.real_name_normalized || u.real_name || '',
         avatar: u.profile?.image_32 || null,
       });
@@ -105,6 +107,14 @@ async function fetchUsers() {
   } while (cursor);
   out.sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko'));
   return out;
+}
+
+// ───── Sender 선택 ────────────────────────────────────────────
+function getClientForSender(senderType) {
+  if (senderType === 'user' && userConfig?.userToken) {
+    return new WebClient(userConfig.userToken);
+  }
+  return slack;
 }
 
 // ───── Express ───────────────────────────────────────────────
@@ -121,6 +131,90 @@ app.get('/api/auth', async (_req, res) => {
   }
 });
 
+// ───── OAuth (내 계정으로 발송) ───────────────────────────────
+const pendingStates = new Set();
+
+app.get('/api/auth/slack', (req, res) => {
+  if (!CLIENT_ID || !REDIRECT_URI) {
+    return res.status(500).send(
+      '<p>SLACK_CLIENT_ID 또는 SLACK_REDIRECT_URI 환경변수가 설정되지 않았습니다.</p>'
+    );
+  }
+  const state = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  pendingStates.add(state);
+  setTimeout(() => pendingStates.delete(state), 10 * 60 * 1000);
+
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    user_scope: 'chat:write,im:write',
+    redirect_uri: REDIRECT_URI,
+    state,
+  });
+  res.redirect(`https://slack.com/oauth/v2/authorize?${params}`);
+});
+
+app.get('/slack/oauth_redirect', async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error) {
+    console.error('Slack OAuth 거부됨:', error);
+    return res.redirect(`/?auth_error=${encodeURIComponent(error)}`);
+  }
+  if (!state || !pendingStates.has(state)) {
+    return res.redirect('/?auth_error=invalid_state');
+  }
+  pendingStates.delete(state);
+
+  try {
+    const result = await slack.oauth.v2.access({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      code,
+      redirect_uri: REDIRECT_URI,
+    });
+
+    if (!result.ok) throw new Error(result.error || 'OAuth 실패');
+
+    const userId = result.authed_user?.id;
+    const userToken = result.authed_user?.access_token;
+    if (!userToken) throw new Error('사용자 토큰을 받지 못했습니다.');
+
+    let userName = userId;
+    let userAvatar = null;
+    try {
+      const info = await slack.users.info({ user: userId });
+      const profile = info.user?.profile;
+      userName = profile?.display_name_normalized || info.user?.real_name_normalized || info.user?.real_name || userId;
+      userAvatar = profile?.image_48 || null;
+    } catch {}
+
+    userConfig = { userToken, userId, userName, userAvatar };
+    saveJSON(USER_CONFIG_FILE, userConfig);
+    console.log(`✅ OAuth 연동 완료 — @${userName}`);
+    res.redirect('/');
+  } catch (err) {
+    console.error('OAuth 실패:', err?.data?.error || err.message);
+    res.redirect(`/?auth_error=${encodeURIComponent(err?.data?.error || err.message)}`);
+  }
+});
+
+app.get('/api/auth/session', (req, res) => {
+  if (!userConfig?.userToken) return res.json({ connected: false });
+  res.json({
+    connected: true,
+    userId: userConfig.userId,
+    userName: userConfig.userName,
+    userAvatar: userConfig.userAvatar,
+  });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  userConfig = null;
+  try { fs.unlinkSync(USER_CONFIG_FILE); } catch {}
+  res.json({ ok: true });
+});
+
+// ───── Slack lists ────────────────────────────────────────────
 app.get('/api/slack/channels', async (req, res) => {
   try {
     if (req.query.refresh || !channelCache.data || Date.now() - channelCache.at > CACHE_TTL) {
@@ -143,6 +237,7 @@ app.get('/api/slack/users', async (req, res) => {
   }
 });
 
+// ───── Schedules CRUD ─────────────────────────────────────────
 app.get('/api/schedules', (_req, res) => {
   res.json([...schedules].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
 });
@@ -157,6 +252,7 @@ app.post('/api/schedules', (req, res) => {
     endDate,
     time,
     daysOfWeek,
+    senderType,
   } = req.body || {};
 
   if (!['once', 'recurring'].includes(scheduleType))
@@ -177,6 +273,8 @@ app.post('/api/schedules', (req, res) => {
       return res.status(400).json({ error: '종료일이 시작일보다 빠를 수 없습니다.' });
   }
 
+  const resolvedSenderType = senderType === 'user' && userConfig?.userToken ? 'user' : 'bot';
+
   const cleanTargets = targets.map((t) => ({
     type: t.type === 'user' ? 'user' : 'channel',
     id: String(t.id),
@@ -189,6 +287,8 @@ app.post('/api/schedules', (req, res) => {
     targets: cleanTargets,
     messageText,
     time,
+    senderType: resolvedSenderType,
+    senderName: resolvedSenderType === 'user' ? (userConfig?.userName || null) : null,
     ...(scheduleType === 'once' ? { date } : { startDate, endDate, daysOfWeek }),
     status: 'active',
     createdAt: new Date().toISOString(),
@@ -198,6 +298,63 @@ app.post('/api/schedules', (req, res) => {
   schedules.push(newSchedule);
   persistSchedules();
   res.json(newSchedule);
+});
+
+app.patch('/api/schedules/:id', (req, res) => {
+  const s = schedules.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: 'Not found' });
+
+  const { messageText, targets, time, date, startDate, endDate, daysOfWeek, scheduleType, senderType } = req.body;
+
+  if (messageText !== undefined) s.messageText = messageText;
+  if (time !== undefined) s.time = time;
+  if (scheduleType !== undefined) s.scheduleType = scheduleType;
+  if (targets !== undefined) {
+    s.targets = targets.map((t) => ({
+      type: t.type === 'user' ? 'user' : 'channel',
+      id: String(t.id),
+      name: String(t.name),
+    }));
+  }
+  if (senderType !== undefined) {
+    s.senderType = senderType === 'user' && userConfig?.userToken ? 'user' : 'bot';
+    s.senderName = s.senderType === 'user' ? (userConfig?.userName || null) : null;
+  }
+  if (date !== undefined) s.date = date;
+  if (startDate !== undefined) s.startDate = startDate;
+  if (endDate !== undefined) s.endDate = endDate;
+  if (daysOfWeek !== undefined) s.daysOfWeek = daysOfWeek;
+
+  // 완료된 일회성 예약을 수정하면 다시 활성화
+  if (s.status === 'completed') {
+    s.status = 'active';
+    s.lastSentAt = null;
+  }
+
+  persistSchedules();
+  res.json(s);
+});
+
+app.patch('/api/schedules/:id/skip-dates', (req, res) => {
+  const s = schedules.find((x) => x.id === req.params.id);
+  if (!s) return res.status(404).json({ error: 'Not found' });
+
+  const { action, date } = req.body;
+  if (!date) return res.status(400).json({ error: '날짜를 입력해주세요.' });
+
+  if (!s.skipDates) s.skipDates = [];
+
+  if (action === 'add') {
+    if (!s.skipDates.includes(date)) s.skipDates.push(date);
+    s.skipDates.sort();
+  } else if (action === 'remove') {
+    s.skipDates = s.skipDates.filter((d) => d !== date);
+  } else {
+    return res.status(400).json({ error: 'action은 add 또는 remove여야 합니다.' });
+  }
+
+  persistSchedules();
+  res.json({ skipDates: s.skipDates });
 });
 
 app.delete('/api/schedules/:id', (req, res) => {
@@ -219,23 +376,21 @@ app.patch('/api/schedules/:id/toggle', (req, res) => {
 });
 
 app.post('/api/test-send', async (req, res) => {
-  const { targets, messageText } = req.body || {};
+  const { targets, messageText, senderType } = req.body || {};
   if (!Array.isArray(targets) || targets.length === 0)
     return res.status(400).json({ error: '받는 대상을 선택해주세요.' });
+
+  const client = getClientForSender(senderType);
   const results = [];
   for (const t of targets) {
     try {
-      await slack.chat.postMessage({
+      await client.chat.postMessage({
         channel: t.id,
         text: `🧪 *테스트 메시지*\n${messageText || '(내용 없음)'}`,
       });
       results.push({ target: t.name, success: true });
     } catch (err) {
-      results.push({
-        target: t.name,
-        success: false,
-        error: err?.data?.error || err.message,
-      });
+      results.push({ target: t.name, success: false, error: err?.data?.error || err.message });
     }
   }
   const failed = results.filter((r) => !r.success);
@@ -246,10 +401,12 @@ app.post('/api/test-send', async (req, res) => {
 
 // ───── Sender ────────────────────────────────────────────────
 async function sendScheduledMessage(s) {
+  const client = getClientForSender(s.senderType);
   let okCount = 0;
+
   for (const t of s.targets) {
     try {
-      await slack.chat.postMessage({ channel: t.id, text: s.messageText });
+      await client.chat.postMessage({ channel: t.id, text: s.messageText });
       okCount++;
     } catch (err) {
       const msg = err?.data?.error || err.message;
@@ -265,6 +422,7 @@ async function sendScheduledMessage(s) {
       );
     }
   }
+
   const now = new Date().toISOString();
   if (okCount > 0) {
     s.sentCount = (s.sentCount || 0) + 1;
@@ -275,9 +433,10 @@ async function sendScheduledMessage(s) {
       success: true,
       okCount,
       total: s.targets.length,
+      senderType: s.senderType,
     });
     console.log(
-      `[${new Date().toLocaleString('ko-KR')}] ✅ 발송 ${okCount}/${s.targets.length} — "${s.messageText.substring(0, 30)}..."`
+      `[${new Date().toLocaleString('ko-KR')}] ✅ 발송 ${okCount}/${s.targets.length} (${s.senderType === 'user' ? `@${s.senderName || 'user'}` : 'bot'}) — "${s.messageText.substring(0, 30)}..."`
     );
   }
   if (s.scheduleType === 'once') s.status = 'completed';
@@ -307,6 +466,7 @@ function tick() {
     } else {
       if (todayDate < s.startDate || todayDate > s.endDate) continue;
       if (!s.daysOfWeek.includes(currentDay)) continue;
+      if (s.skipDates?.includes(todayDate)) continue;
       if (s.lastSentAt) {
         const last = new Date(s.lastSentAt);
         const lastDate = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
@@ -327,6 +487,11 @@ app.listen(PORT, () => {
   console.log(`│  Timezone: ${TZ.padEnd(33)}│`);
   console.log(`│  Storage:  schedules.json (${schedules.length}건 로드됨)`);
   console.log('└─────────────────────────────────────────────┘\n');
+
+  if (userConfig?.userName) {
+    console.log(`👤 연동된 계정: @${userConfig.userName}\n`);
+  }
+
   slack.auth
     .test()
     .then((r) => console.log(`✅ Slack 연결됨 — workspace: ${r.team}, bot: @${r.user}\n`))

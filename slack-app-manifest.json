@@ -11,6 +11,9 @@
     }
   },
   "oauth_config": {
+    "redirect_urls": [
+      "https://YOUR-APP.railway.app/slack/oauth_redirect"
+    ],
     "scopes": {
       "bot": [
         "chat:write",
@@ -20,6 +23,10 @@
         "users:read.email",
         "channels:read",
         "groups:read"
+      ],
+      "user": [
+        "chat:write",
+        "im:write"
       ]
     }
   },

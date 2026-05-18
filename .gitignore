@@ -4,5 +4,7 @@ schedules.json
 schedules.json.tmp
 send_log.json
 send_log.json.tmp
+user_config.json
+user_config.json.tmp
 *.log
 .DS_Store

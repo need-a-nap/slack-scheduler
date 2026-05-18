@@ -2,7 +2,7 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slack Scheduler</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -25,7 +25,7 @@
       .scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
     </style>
   </head>
-  <body class="bg-gray-950">
+  <body class="bg-gray-950 text-gray-100">
     <div id="root"></div>
 
     <script type="text/babel" data-presets="react">
@@ -41,7 +41,7 @@
       const Clock = mkIcon([<circle key="c" cx="12" cy="12" r="10" />, <polyline key="p" points="12 6 12 12 16 14" />]);
       const Calendar = mkIcon([<rect key="r" x="3" y="4" width="18" height="18" rx="2" ry="2" />, <line key="l1" x1="16" y1="2" x2="16" y2="6" />, <line key="l2" x1="8" y1="2" x2="8" y2="6" />, <line key="l3" x1="3" y1="10" x2="21" y2="10" />]);
       const CheckCircle2 = mkIcon([<circle key="c" cx="12" cy="12" r="10" />, <path key="p" d="m9 12 2 2 4-4" />]);
-      const Trash2 = mkIcon([<polyline key="p1" points="3 6 5 6 21 6" />, <path key="p2" d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />, <path key="p3" d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />, <line key="l1" x1="10" y1="11" x2="10" y2="17" />, <line key="l2" x1="14" y1="11" x2="14" y2="17" />]);
+      const Trash2 = mkIcon([<polyline key="p1" points="3 6 5 6 21 6" />, <path key="p2" d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />, <path key="p3" d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 1 1 2 2v2" />, <line key="l1" x1="10" y1="11" x2="10" y2="17" />, <line key="l2" x1="14" y1="11" x2="14" y2="17" />]);
       const Send = mkIcon([<line key="l" x1="22" y1="2" x2="11" y2="13" />, <polygon key="p" points="22 2 15 22 11 13 2 9 22 2" />]);
       const Plus = mkIcon([<line key="l1" x1="12" y1="5" x2="12" y2="19" />, <line key="l2" x1="5" y1="12" x2="19" y2="12" />]);
       const Users = mkIcon([<path key="p1" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />, <circle key="c" cx="9" cy="7" r="4" />, <path key="p2" d="M23 21v-2a4 4 0 0 0-3-3.87" />, <path key="p3" d="M16 3.13a4 4 0 0 1 0 7.75" />]);
@@ -51,17 +51,47 @@
       const Repeat = mkIcon([<polyline key="p1" points="17 1 21 5 17 9" />, <path key="p2" d="M3 11V9a4 4 0 0 1 4-4h14" />, <polyline key="p3" points="7 23 3 19 7 15" />, <path key="p4" d="M21 13v2a4 4 0 0 1-4 4H3" />]);
       const X = mkIcon([<line key="l1" x1="18" y1="6" x2="6" y2="18" />, <line key="l2" x1="6" y1="6" x2="18" y2="18" />]);
       const Link2 = mkIcon([<path key="p1" d="M9 17H7A5 5 0 0 1 7 7h2" />, <path key="p2" d="M15 7h2a5 5 0 1 1 0 10h-2" />, <line key="l" x1="8" y1="12" x2="16" y2="12" />]);
+      const LogOut = mkIcon([<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />, <polyline points="16 17 21 12 16 7" />, <line x1="21" y1="12" x2="9" y2="12" />]);
+      const Pencil = mkIcon([<path key="p1" d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />, <path key="p2" d="m15 5 4 4" />]);
+      const Ban = mkIcon([<circle key="c" cx="12" cy="12" r="10" />, <line key="l" x1="4.93" y1="4.93" x2="19.07" y2="19.07" />]);
+
+      // ───── Dynamic URL Resolution for Blob Iframe Sandbox ───
+      const getBaseUrl = () => {
+        let base = window.location.origin;
+        if (!base || base === 'null' || window.location.protocol === 'blob:') {
+          // Extract the actual web origin from the Blob URL (e.g., blob:https://xxx.goog/uuid)
+          const match = window.location.href.match(/^blob:(https?:\/\/[^\/]+)/);
+          if (match) {
+            base = match[1];
+          } else {
+            base = (window.location.protocol === 'https:' ? 'https://' : 'http://') + window.location.host;
+          }
+        }
+        return base;
+      };
+
+      const resolveUrl = (path) => {
+        const base = getBaseUrl();
+        const cleanPath = path.startsWith('/') ? path : '/' + path;
+        return `${base}${cleanPath}`;
+      };
 
       // ───── API ──────────────────────────────────────────────
       const api = {
-        async list() { const r = await fetch('/api/schedules'); if (!r.ok) throw new Error('목록 조회 실패'); return r.json(); },
-        async create(p) { const r = await fetch('/api/schedules', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); if (!r.ok) throw new Error((await r.json()).error || '생성 실패'); return r.json(); },
-        async remove(id) { const r = await fetch('/api/schedules/'+id, { method:'DELETE' }); if (!r.ok) throw new Error('삭제 실패'); },
-        async toggle(id) { const r = await fetch('/api/schedules/'+id+'/toggle', { method:'PATCH' }); if (!r.ok) throw new Error((await r.json()).error || '상태 변경 실패'); return r.json(); },
-        async testSend(p) { const r = await fetch('/api/test-send', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || '전송 실패'); return d; },
-        async auth() { const r = await fetch('/api/auth'); return r.json(); },
-        async channels(refresh=false) { const r = await fetch('/api/slack/channels' + (refresh?'?refresh=1':'')); if (!r.ok) throw new Error((await r.json()).error || '채널 목록 조회 실패'); return r.json(); },
-        async users(refresh=false) { const r = await fetch('/api/slack/users' + (refresh?'?refresh=1':'')); if (!r.ok) throw new Error((await r.json()).error || '사용자 목록 조회 실패'); return r.json(); },
+        async list() { const r = await fetch(resolveUrl('/api/schedules')); if (!r.ok) throw new Error('목록 조회 실패'); return r.json(); },
+        async create(p) { const r = await fetch(resolveUrl('/api/schedules'), { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); if (!r.ok) throw new Error((await r.json()).error || '생성 실패'); return r.json(); },
+        async remove(id) { const r = await fetch(resolveUrl('/api/schedules/'+id), { method:'DELETE' }); if (!r.ok) throw new Error('삭제 실패'); },
+        async toggle(id) { const r = await fetch(resolveUrl('/api/schedules/'+id+'/toggle'), { method:'PATCH' }); if (!r.ok) throw new Error((await r.json()).error || '상태 변경 실패'); return r.json(); },
+        async testSend(p) { const r = await fetch(resolveUrl('/api/test-send'), { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || '전송 실패'); return d; },
+        async auth() { const r = await fetch(resolveUrl('/api/auth')); return r.json(); },
+        async channels(refresh=false) { const r = await fetch(resolveUrl('/api/slack/channels' + (refresh?'?refresh=1':''))); if (!r.ok) throw new Error((await r.json()).error || '채널 목록 조회 실패'); return r.json(); },
+        async users(refresh=false) { const r = await fetch(resolveUrl('/api/slack/users' + (refresh?'?refresh=1':''))); if (!r.ok) throw new Error((await r.json()).error || '사용자 목록 조회 실패'); return r.json(); },
+        
+        // OAuth 연동 관련 API 호출 정의
+        async getSession() { const r = await fetch(resolveUrl('/api/auth/session')); if (!r.ok) return null; return r.json(); },
+        async logoutSession() { await fetch(resolveUrl('/api/auth/logout'), { method: 'POST' }); },
+        async update(id, p) { const r = await fetch(resolveUrl('/api/schedules/'+id), { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p) }); if (!r.ok) throw new Error((await r.json()).error || '수정 실패'); return r.json(); },
+        async skipDate(id, action, date) { const r = await fetch(resolveUrl('/api/schedules/'+id+'/skip-dates'), { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action, date }) }); if (!r.ok) throw new Error((await r.json()).error || '날짜 처리 실패'); return r.json(); },
       };
 
       // ───── ChannelUserPicker: multi-select with Slack data ─────
@@ -315,13 +345,23 @@
       }
 
       // ───── Schedule card ────────────────────────────────────
-      function ScheduleCard({ msg, onToggle, onDelete }) {
+      function ScheduleCard({ msg, onToggle, onDelete, onEdit, onAddSkipDate, onRemoveSkipDate }) {
+        const [showSkipInput, setShowSkipInput] = useState(false);
+        const [skipDateInput, setSkipDateInput] = useState('');
+
         const isOnce = msg.scheduleType === 'once';
         const statusInfo = msg.status === 'completed'
           ? { cls:'bg-gray-700/50 text-gray-400 border-gray-700', label:'완료' }
           : msg.status === 'active'
             ? { cls:'bg-green-900/30 text-green-400 border-green-900/50', label:'활성' }
             : { cls:'bg-yellow-900/30 text-yellow-400 border-yellow-900/50', label:'일시정지' };
+
+        const handleAddSkip = () => {
+          if (!skipDateInput) return;
+          onAddSkipDate(msg.id, skipDateInput);
+          setSkipDateInput('');
+          setShowSkipInput(false);
+        };
 
         return (
           <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 p-5 hover:border-gray-700 transition-colors">
@@ -337,6 +377,16 @@
                   </span>
                   {msg.sentCount > 0 && (
                     <span className="text-xs text-gray-500">· {msg.sentCount}회 발송</span>
+                  )}
+                  {msg.senderType === 'user' && (
+                    <span className="px-2 py-0.5 rounded-md text-xs bg-indigo-950/40 text-indigo-300 border border-indigo-900/50 font-medium">
+                      👤 {msg.senderName || '연동된 계정'} 발송
+                    </span>
+                  )}
+                  {msg.senderType === 'bot' && (
+                    <span className="px-2 py-0.5 rounded-md text-xs bg-gray-850 text-gray-400 border border-gray-800 font-medium">
+                      🤖 앱 프로필 발송
+                    </span>
                   )}
                 </div>
 
@@ -373,6 +423,13 @@
                 </p>
               </div>
               <div className="flex space-x-1 shrink-0">
+                <button
+                  onClick={() => onEdit(msg)}
+                  className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
+                  title="수정"
+                >
+                  <Pencil size={18} />
+                </button>
                 {msg.status !== 'completed' && (
                   <button
                     onClick={() => onToggle(msg.id)}
@@ -391,9 +448,85 @@
                 </button>
               </div>
             </div>
+
             <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 text-gray-300 text-sm whitespace-pre-wrap">
               {msg.messageText}
             </div>
+
+            {/* 건너뛸 날짜 (반복 예약만) */}
+            {!isOnce && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+                    <Ban size={12} />
+                    건너뛸 날짜
+                    {msg.skipDates?.length > 0 && (
+                      <span className="bg-orange-900/40 text-orange-300 border border-orange-800/60 rounded-full px-1.5 py-0.5 text-xs">
+                        {msg.skipDates.length}
+                      </span>
+                    )}
+                  </span>
+                  {msg.status !== 'completed' && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowSkipInput(!showSkipInput); setSkipDateInput(''); }}
+                      className="text-xs text-pink-400 hover:text-pink-300 transition-colors"
+                    >
+                      + 날짜 추가
+                    </button>
+                  )}
+                </div>
+
+                {msg.skipDates?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {msg.skipDates.map((d) => (
+                      <span key={d} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-orange-900/30 text-orange-300 border border-orange-800/60">
+                        {formatOnceDate(d)}
+                        <button
+                          type="button"
+                          onClick={() => onRemoveSkipDate(msg.id, d)}
+                          className="hover:text-red-400 transition-colors ml-0.5"
+                          title="건너뛰기 해제"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {showSkipInput && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={skipDateInput}
+                      onChange={(e) => setSkipDateInput(e.target.value)}
+                      min={todayStr()}
+                      className="flex-1 text-xs border border-gray-700 bg-gray-950 text-white rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-pink-500 focus:border-pink-500"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSkip}
+                      className="text-xs bg-pink-600/20 hover:bg-pink-600/40 text-pink-400 px-3 py-1.5 rounded-lg border border-pink-500/30 transition-colors whitespace-nowrap"
+                    >
+                      추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSkipInput(false)}
+                      className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5 transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                )}
+
+                {!msg.skipDates?.length && !showSkipInput && (
+                  <p className="text-xs text-gray-600">없음 — 위 버튼으로 특정 날짜를 건너뛸 수 있어요.</p>
+                )}
+              </div>
+            )}
           </div>
         );
       }
@@ -405,7 +538,12 @@
         const [loading, setLoading] = useState(true);
         const [workspace, setWorkspace] = useState(null);
 
+        // 간편 OAuth 로그인 상태 관리
+        const [currentUser, setCurrentUser] = useState(null); // { name, avatar, userId }
+
         const [scheduleType, setScheduleType] = useState('recurring');
+        const [senderType, setSenderType] = useState('bot'); // 'bot' or 'user'
+        
         const [targets, setTargets] = useState([]);
         const [messageText, setMessageText] = useState('');
         const [date, setDate] = useState('');
@@ -414,6 +552,7 @@
         const [time, setTime] = useState('');
         const [daysOfWeek, setDaysOfWeek] = useState([]);
         const [submitting, setSubmitting] = useState(false);
+        const [editingId, setEditingId] = useState(null);
         const textareaRef = useRef(null);
 
         const [toastMessage, setToastMessage] = useState('');
@@ -430,19 +569,73 @@
           catch (e) { showNotification(e.message, 'error'); }
         }, [showNotification]);
 
+        // OAuth 세션 정보 검증
+        const checkUserSession = useCallback(async () => {
+          try {
+            const session = await api.getSession();
+            if (session && session.connected) {
+              setCurrentUser({
+                name: session.userName,
+                avatar: session.userAvatar,
+                userId: session.userId
+              });
+              setSenderType('user'); // 연동되어 있다면 자동으로 내 계정 발송 모드로 우선 세팅
+            } else {
+              setCurrentUser(null);
+              setSenderType('bot');
+            }
+          } catch (e) {
+            console.error('세션 검증 실패:', e);
+          }
+        }, []);
+
         useEffect(() => {
           (async () => {
             try { const a = await api.auth(); if (a.ok) setWorkspace(a); } catch {}
+            await checkUserSession();
             await refresh();
             setLoading(false);
           })();
-        }, [refresh]);
+        }, [refresh, checkUserSession]);
+
+        // 슬랙 로그인 (OAuth) 팝업 / 리다이렉트 처리
+        const handleSlackLogin = () => {
+          // 백엔드의 Slack OAuth 주소로 이동 (사용자는 버튼 하나로 연동을 마칩니다)
+          window.location.href = resolveUrl('/api/auth/slack');
+        };
+
+        const handleSlackLogout = async () => {
+          if (!window.confirm('슬랙 계정 연동을 해제하시겠습니까?')) return;
+          try {
+            await api.logoutSession();
+            showNotification('슬랙 계정 연동이 해제되었습니다.');
+            setCurrentUser(null);
+            setSenderType('bot');
+          } catch (e) {
+            showNotification('해제 실패: ' + e.message, 'error');
+          }
+        };
 
         const resetForm = () => {
           setTargets([]); setMessageText('');
           setDate(''); setStartDate(''); setEndDate(''); setTime('');
           setDaysOfWeek([]); setScheduleType('recurring');
+          setEditingId(null);
         };
+
+        const startEdit = useCallback((msg) => {
+          setEditingId(msg.id);
+          setScheduleType(msg.scheduleType);
+          setSenderType(msg.senderType || 'bot');
+          setTargets([...msg.targets]);
+          setMessageText(msg.messageText);
+          setTime(msg.time);
+          setDate(msg.date || '');
+          setStartDate(msg.startDate || '');
+          setEndDate(msg.endDate || '');
+          setDaysOfWeek(msg.daysOfWeek ? [...msg.daysOfWeek] : []);
+          setActiveTab('new');
+        }, []);
 
         const handleScheduleMessage = async (e) => {
           e.preventDefault();
@@ -457,14 +650,29 @@
             if (daysOfWeek.length === 0) return showNotification('반복 요일을 선택해주세요.', 'error');
           }
 
+          if (senderType === 'user' && !currentUser) {
+            return showNotification('먼저 내 슬랙 계정을 연동해 주세요.', 'error');
+          }
+
           setSubmitting(true);
           try {
-            const payload = { scheduleType, targets, messageText, time,
-              ...(scheduleType === 'once' ? { date } : { startDate, endDate, daysOfWeek }) };
-            await api.create(payload);
+            const payload = {
+              scheduleType,
+              targets,
+              messageText,
+              time,
+              senderType,
+              ...(scheduleType === 'once' ? { date } : { startDate, endDate, daysOfWeek }),
+            };
+            if (editingId) {
+              await api.update(editingId, payload);
+              showNotification('메시지가 수정되었습니다.', 'success');
+            } else {
+              await api.create(payload);
+              showNotification('메시지가 성공적으로 예약되었습니다.', 'success');
+            }
             resetForm();
             await refresh();
-            showNotification('메시지가 성공적으로 예약되었습니다.', 'success');
             setActiveTab('dashboard');
           } catch (err) { showNotification(err.message, 'error'); }
           finally { setSubmitting(false); }
@@ -484,11 +692,29 @@
           catch (e) { showNotification(e.message, 'error'); }
         };
 
+        const handleAddSkipDate = async (id, date) => {
+          try {
+            const { skipDates } = await api.skipDate(id, 'add', date);
+            setScheduledMessages((msgs) => msgs.map((m) => m.id === id ? { ...m, skipDates } : m));
+            showNotification(`${date} 날짜를 건너뛰기로 설정했습니다.`);
+          } catch (e) { showNotification(e.message, 'error'); }
+        };
+
+        const handleRemoveSkipDate = async (id, date) => {
+          try {
+            const { skipDates } = await api.skipDate(id, 'remove', date);
+            setScheduledMessages((msgs) => msgs.map((m) => m.id === id ? { ...m, skipDates } : m));
+            showNotification(`${date} 건너뛰기를 해제했습니다.`);
+          } catch (e) { showNotification(e.message, 'error'); }
+        };
+
         const handleTestSend = async () => {
           if (targets.length === 0) return showNotification('받는 대상을 먼저 선택해주세요.', 'error');
           if (!messageText) return showNotification('메시지 내용을 입력해주세요.', 'error');
+          if (senderType === 'user' && !currentUser) return showNotification('먼저 내 슬랙 계정을 연동해 주세요.', 'error');
+
           try {
-            const r = await api.testSend({ targets, messageText });
+            const r = await api.testSend({ targets, messageText, senderType });
             const failed = (r.results || []).filter((x) => !x.success);
             if (failed.length === 0) showNotification(`테스트 메시지를 ${targets.length}곳에 보냈습니다.`);
             else showNotification(`${targets.length - failed.length}곳 성공, ${failed.length}곳 실패 (${failed.map(f=>f.error).join(', ')})`, 'error');
@@ -525,7 +751,7 @@
             ) : (
               <div className="grid gap-4">
                 {scheduledMessages.map((msg) => (
-                  <ScheduleCard key={msg.id} msg={msg} onToggle={toggleStatus} onDelete={handleDelete} />
+                  <ScheduleCard key={msg.id} msg={msg} onToggle={toggleStatus} onDelete={handleDelete} onEdit={startEdit} onAddSkipDate={handleAddSkipDate} onRemoveSkipDate={handleRemoveSkipDate} />
                 ))}
               </div>
             )}
@@ -535,8 +761,8 @@
         const renderNewSchedule = () => (
           <div className="bg-gray-900 rounded-xl shadow-sm border border-gray-800 overflow-hidden">
             <div className="border-b border-gray-800 px-6 py-4 bg-gray-900/50">
-              <h2 className="text-lg font-semibold text-gray-100">새 메시지 예약</h2>
-              <p className="text-sm text-gray-400 mt-1">받는 사람을 골라 기간과 시간을 설정하세요.</p>
+              <h2 className="text-lg font-semibold text-gray-100">{editingId ? '메시지 수정' : '새 메시지 예약'}</h2>
+              <p className="text-sm text-gray-400 mt-1">{editingId ? '내용, 대상, 시간 등을 수정하고 저장하세요.' : '받는 사람을 골라 기간과 시간을 설정하세요.'}</p>
             </div>
 
             <form onSubmit={handleScheduleMessage} className="p-6 space-y-6">
@@ -559,6 +785,74 @@
                       </div>
                     </label>
                   ))}
+                </div>
+              </div>
+
+              {/* 발송 프로필 간편 설정 */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">발송할 프로필 선택</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  
+                  {/* 내 계정 선택 */}
+                  <div 
+                    onClick={() => currentUser && setSenderType('user')}
+                    className={'flex items-start gap-3 p-4 border rounded-lg transition-all ' + 
+                      (senderType === 'user' ? 'bg-gray-800 border-pink-500/50 ring-1 ring-pink-500/30' : 'bg-gray-950 border-gray-700') +
+                      (currentUser ? ' cursor-pointer hover:bg-gray-800' : ' opacity-75')
+                    }
+                  >
+                    <input 
+                      type="radio" 
+                      name="senderType" 
+                      value="user" 
+                      checked={senderType === 'user'} 
+                      disabled={!currentUser}
+                      onChange={() => setSenderType('user')} 
+                      className="w-4 h-4 mt-0.5 text-pink-600 focus:ring-pink-500 bg-gray-900 border-gray-700" 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Users size={16} className={senderType === 'user' ? 'text-pink-500' : 'text-gray-500'} />
+                        <span className="text-sm font-medium text-gray-200">내 슬랙 계정으로 발송</span>
+                      </div>
+                      
+                      {currentUser ? (
+                        <div className="mt-2 flex items-center gap-2 bg-gray-900/60 p-2 rounded-lg border border-gray-800">
+                          <img src={currentUser.avatar} className="w-6 h-6 rounded-full" alt="" />
+                          <span className="text-xs text-pink-400 font-medium truncate">{currentUser.name} (연동 완료)</span>
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500">아직 계정이 연동되지 않았습니다.</p>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleSlackLogin(); }}
+                            className="mt-2 w-full bg-pink-600/15 hover:bg-pink-600/35 text-pink-400 text-xs py-1.5 px-3 rounded-md border border-pink-500/30 transition-all font-semibold flex items-center justify-center gap-1.5"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523 2.528 2.528 0 0 1-2.522-2.523 2.528 2.528 0 0 1 2.522-2.52h2.52v2.52zm1.261 0a2.528 2.528 0 0 1 2.52-2.52h5.043a2.528 2.528 0 0 1 2.522 2.52v5.042a2.528 2.528 0 0 1-2.522 2.52H8.823a2.528 2.528 0 0 1-2.52-2.52v-5.042zM8.823 5.043a2.528 2.528 0 0 1 2.52-2.52 2.528 2.528 0 0 1 2.522 2.52v2.52h-2.522a2.528 2.528 0 0 1-2.52-2.52zm0 1.261a2.528 2.528 0 0 1 2.52 2.52v5.043a2.528 2.528 0 0 1-2.52 2.522H3.78a2.528 2.528 0 0 1-2.522-2.522V8.824a2.528 2.528 0 0 1 2.522-2.52h5.043zm10.135 3.78a2.528 2.528 0 0 1 2.522-2.52 2.528 2.528 0 0 1 2.52 2.52 2.528 2.528 0 0 1-2.52 2.522h-2.522v-2.522zm-1.262 0a2.528 2.528 0 0 1-2.52 2.522h-5.043a2.528 2.528 0 0 1-2.522-2.522V3.78a2.528 2.528 0 0 1 2.522-2.52h5.043a2.528 2.528 0 0 1 2.52 2.52v5.043zm-3.78 10.135a2.528 2.528 0 0 1-2.522 2.52 2.528 2.528 0 0 1-2.52-2.52v-2.522h2.52a2.528 2.528 0 0 1 2.522 2.52v2.522zm0-1.262a2.528 2.528 0 0 1-2.522-2.52v-5.043a2.528 2.528 0 0 1 2.522-2.52h5.043a2.528 2.528 0 0 1 2.52 2.52v5.043h-5.043z"/>
+                            </svg>
+                            클릭하여 간편 연동하기
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 봇 계정 선택 */}
+                  <label className={'flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-colors ' + (senderType === 'bot' ? 'bg-gray-800 border-pink-500/50 ring-1 ring-pink-500/30' : 'bg-gray-950 border-gray-700 hover:bg-gray-800')}>
+                    <input type="radio" name="senderType" value="bot" checked={senderType === 'bot'} onChange={() => setSenderType('bot')} className="w-4 h-4 mt-0.5 text-pink-600 focus:ring-pink-500 bg-gray-900 border-gray-700" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare size={16} className={senderType === 'bot' ? 'text-pink-500' : 'text-gray-500'} />
+                        <span className="text-sm font-medium text-gray-200">스케줄러 앱 프로필로 발송</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        기본 슬랙 스케줄러 앱 이름과 프로필 이미지로 채널에 전송됩니다.
+                      </p>
+                    </div>
+                  </label>
+
                 </div>
               </div>
 
@@ -654,9 +948,9 @@
                   <Send size={14} className="mr-2" />지금 한 번 보내보기
                 </button>
                 <div className="flex space-x-3">
-                  <button type="button" onClick={() => setActiveTab('dashboard')} className="flex-1 sm:flex-none px-4 py-2 border border-gray-700 shadow-sm text-sm font-medium rounded-lg text-gray-300 bg-gray-900 hover:bg-gray-800 transition-colors">취소</button>
+                  <button type="button" onClick={() => { resetForm(); setActiveTab('dashboard'); }} className="flex-1 sm:flex-none px-4 py-2 border border-gray-700 shadow-sm text-sm font-medium rounded-lg text-gray-300 bg-gray-900 hover:bg-gray-800 transition-colors">취소</button>
                   <button type="submit" disabled={submitting} className="flex-1 sm:flex-none px-6 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-pink-600 hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors">
-                    <Send size={16} className="mr-2" />{submitting ? '저장 중...' : '예약 저장하기'}
+                    <Send size={16} className="mr-2" />{submitting ? '저장 중...' : (editingId ? '수정 저장하기' : '예약 저장하기')}
                   </button>
                 </div>
               </div>
@@ -676,7 +970,31 @@
                   <span className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full font-medium border border-gray-700">
                     {workspace ? `${workspace.team} · @${workspace.botName}` : '연결 확인 중...'}
                   </span>
-                  <button className="text-gray-500 hover:text-pink-400 transition-colors"><Settings size={20} /></button>
+                  
+                  {/* 슬랙 연동 상태에 따른 버튼 */}
+                  {currentUser ? (
+                    <div className="flex items-center gap-2 bg-gray-850 pl-2 pr-1 py-1 rounded-full border border-gray-700">
+                      <img src={currentUser.avatar} className="w-6 h-6 rounded-full" alt="" />
+                      <span className="text-xs text-gray-200 font-medium max-w-[100px] truncate">{currentUser.name}</span>
+                      <button 
+                        onClick={handleSlackLogout} 
+                        className="p-1 text-gray-400 hover:text-red-400 rounded-full transition-colors" 
+                        title="로그아웃/연동해제"
+                      >
+                        <LogOut size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={handleSlackLogin} 
+                      className="bg-[#4A154B] hover:bg-[#3F0E40] text-white text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-md"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523 2.528 2.528 0 0 1-2.522-2.523 2.528 2.528 0 0 1 2.522-2.52h2.52v2.52zm1.261 0a2.528 2.528 0 0 1 2.52-2.52h5.043a2.528 2.528 0 0 1 2.522 2.52v5.042a2.528 2.528 0 0 1-2.522 2.52H8.823a2.528 2.528 0 0 1-2.52-2.52v-5.042zM8.823 5.043a2.528 2.528 0 0 1 2.52-2.52 2.528 2.528 0 0 1 2.522 2.52v2.52h-2.522a2.528 2.528 0 0 1-2.52-2.52zm0 1.261a2.528 2.528 0 0 1 2.52 2.52v5.043a2.528 2.528 0 0 1-2.52 2.522H3.78a2.528 2.528 0 0 1-2.522-2.522V8.824a2.528 2.528 0 0 1 2.522-2.52h5.043zm10.135 3.78a2.528 2.528 0 0 1 2.522-2.52 2.528 2.528 0 0 1 2.52 2.52 2.528 2.528 0 0 1-2.52 2.522h-2.522v-2.522zm-1.262 0a2.528 2.528 0 0 1-2.52 2.522h-5.043a2.528 2.528 0 0 1-2.522-2.522V3.78a2.528 2.528 0 0 1 2.522-2.52h5.043a2.528 2.528 0 0 1 2.52 2.52v5.043zm-3.78 10.135a2.528 2.528 0 0 1-2.522 2.52 2.528 2.528 0 0 1-2.52-2.52v-2.522h2.52a2.528 2.528 0 0 1 2.522 2.52v2.522zm0-1.262a2.528 2.528 0 0 1-2.522-2.52v-5.043a2.528 2.528 0 0 1 2.522-2.52h5.043a2.528 2.528 0 0 1 2.52 2.52v5.043h-5.043z"/>
+                      </svg>
+                      Sign in with Slack
+                    </button>
+                  )}
                 </div>
               </div>
             </header>
