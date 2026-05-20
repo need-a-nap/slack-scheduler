@@ -186,6 +186,18 @@ function getClientForUser(user, senderType) {
   return slack;
 }
 
+// ───── 개인화 변수 치환 ──────────────────────────────────────
+// {이름} / {name} → 받는 사람 이름으로 치환 (DM 대상에 한함)
+function personalize(text, target) {
+  if (!text) return text;
+  if (target?.type === 'user') {
+    const name = target.name || '';
+    return text.replace(/\{이름\}/g, name).replace(/\{name\}/gi, name);
+  }
+  // 채널: 변수가 있으면 빈 문자열로 대체 (실수 노출 방지)
+  return text.replace(/\{이름\}/g, '').replace(/\{name\}/gi, '');
+}
+
 // ───── Express ───────────────────────────────────────────────
 const app = express();
 app.set('trust proxy', 1);
@@ -459,9 +471,10 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
   const results = [];
   for (const t of targets) {
     try {
+      const personalText = personalize(messageText || '(내용 없음)', t);
       await client.chat.postMessage({
         channel: t.id,
-        text: `🧪 *테스트 메시지*\n${messageText || '(내용 없음)'}`,
+        text: `🧪 *테스트 메시지*\n${personalText}`,
       });
       results.push({ target: t.name, success: true });
     } catch (err) {
@@ -482,7 +495,8 @@ async function sendScheduledMessage(s) {
 
   for (const t of s.targets) {
     try {
-      await client.chat.postMessage({ channel: t.id, text: s.messageText });
+      const personalText = personalize(s.messageText, t);
+      await client.chat.postMessage({ channel: t.id, text: personalText });
       okCount++;
     } catch (err) {
       const msg = err?.data?.error || err.message;
