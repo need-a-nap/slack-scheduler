@@ -1082,7 +1082,7 @@
                       onBlur={() => setTimeout(() => setMentionState(null), 200)}
                       className="shadow-sm focus:ring-pink-500 focus:border-pink-500 block w-full sm:text-sm border-gray-700 bg-gray-950 text-white rounded-b-lg p-3 border border-t-0 placeholder-gray-600 focus:rounded-t-none leading-relaxed"
                       style={{ minHeight: '240px', maxHeight: '600px', resize: 'vertical', overflow: 'auto' }}
-                      placeholder={'여기에 메시지를 입력하세요.\n\n💡 받는 사람마다 다르게 보내고 싶다면 {이름} 을 사용하세요.\n   예) "안녕하세요 {이름}님, 오늘 회의 잊지 마세요!"\n   → DM 발송 시 받는 사람의 이름으로 자동 치환됩니다.\n\n@ 를 입력하면 슬랙 멤버를 멘션할 수 있습니다.\n위 도구로 *굵게*, _기울임_, ~취소선~, `코드`, 링크 등을 적용할 수 있어요.'}
+                      placeholder={'여기에 메시지를 입력하세요.\n\n💡 받는 사람마다 다르게 보내고 싶다면 {이름} 을 사용하세요.\n   예) "안녕하세요 {이름}님, 오늘 회의 잊지 마세요!"\n   → DM 발송 시 받는 사람이 슬랙에 설정해둔 이름(표시 이름)으로 자동 치환됩니다.\n\n@ 를 입력하면 슬랙 멤버를 멘션할 수 있습니다.\n위 도구로 *굵게*, _기울임_, ~취소선~, `코드`, 링크 등을 적용할 수 있어요.'}
                     />
 
                     {/* @멘션 드롭다운 */}
@@ -1120,7 +1120,7 @@
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">
-                  💡 <code className="bg-indigo-900/40 text-indigo-300 px-1 rounded">{'{이름}'}</code> 을 입력하면 DM 받는 사람의 이름으로 자동 치환됩니다. <span className="text-gray-600">(채널 발송 시에는 빈 값으로 처리)</span>
+                  💡 <code className="bg-indigo-900/40 text-indigo-300 px-1 rounded">{'{이름}'}</code> 을 입력하면 DM 받는 사람이 슬랙에 설정한 이름(표시 이름)으로 자동 치환됩니다. <span className="text-gray-600">(채널 발송 시에는 빈 값으로 처리)</span>
                 </p>
 
                 {/* 미리보기 (슬랙 메시지 형태) */}
