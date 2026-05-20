@@ -218,15 +218,31 @@ function getClientForUser(user, senderType) {
 }
 
 // ───── 개인화 변수 치환 ──────────────────────────────────────
-// {이름} / {name} → 받는 사람 이름으로 치환 (DM 대상에 한함)
+// {이름}    → 받는 사람 이름 (DM)
+// {이름만}  → 첫 글자 제거 후 '_' 앞까지 (예: 홍길동_팀 → 길동, 김별 → 별)
+// {name}    → 영문 alias for {이름}
+function extractShortName(fullName) {
+  if (!fullName) return '';
+  const afterFirst = fullName.slice(1);
+  const underscoreIdx = afterFirst.indexOf('_');
+  return underscoreIdx >= 0 ? afterFirst.slice(0, underscoreIdx) : afterFirst;
+}
+
 function personalize(text, target) {
   if (!text) return text;
   if (target?.type === 'user') {
     const name = target.name || '';
-    return text.replace(/\{이름\}/g, name).replace(/\{name\}/gi, name);
+    const shortName = extractShortName(name);
+    return text
+      .replace(/\{이름만\}/g, shortName)
+      .replace(/\{이름\}/g, name)
+      .replace(/\{name\}/gi, name);
   }
   // 채널: 변수가 있으면 빈 문자열로 대체 (실수 노출 방지)
-  return text.replace(/\{이름\}/g, '').replace(/\{name\}/gi, '');
+  return text
+    .replace(/\{이름만\}/g, '')
+    .replace(/\{이름\}/g, '')
+    .replace(/\{name\}/gi, '');
 }
 
 // ───── Express ───────────────────────────────────────────────
