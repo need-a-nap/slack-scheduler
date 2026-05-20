@@ -32,10 +32,41 @@ const SESSION_COOKIE = 'ss_session';
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // ───── Storage ────────────────────────────────────────────────
-const DATA_FILE = path.join(__dirname, 'schedules.json');
-const LOG_FILE = path.join(__dirname, 'send_log.json');
-const USERS_FILE = path.join(__dirname, 'users.json');
-const OLD_USER_CONFIG_FILE = path.join(__dirname, 'user_config.json');
+// 영구 저장 디렉터리 (Railway Volume 등). 미지정 시 프로젝트 루트 사용.
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+try {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  // 쓰기 권한 검증
+  const probe = path.join(DATA_DIR, '.write_test');
+  fs.writeFileSync(probe, 'ok');
+  fs.unlinkSync(probe);
+  console.log(`[DATA] 영구 저장 디렉터리: ${DATA_DIR}`);
+} catch (e) {
+  console.error(`[DATA] ❌ ${DATA_DIR} 디렉터리에 쓸 수 없습니다:`, e.message);
+  process.exit(1);
+}
+
+const DATA_FILE = path.join(DATA_DIR, 'schedules.json');
+const LOG_FILE = path.join(DATA_DIR, 'send_log.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const OLD_USER_CONFIG_FILE = path.join(DATA_DIR, 'user_config.json');
+
+// 일회성 마이그레이션: DATA_DIR이 새로 지정되어 있고 그 안에 데이터가 없지만
+// 프로젝트 루트(__dirname)에 기존 데이터가 있다면 한 번만 옮긴다.
+if (DATA_DIR !== __dirname) {
+  for (const fn of ['schedules.json', 'send_log.json', 'users.json', 'user_config.json']) {
+    const src = path.join(__dirname, fn);
+    const dst = path.join(DATA_DIR, fn);
+    if (fs.existsSync(src) && !fs.existsSync(dst)) {
+      try {
+        fs.copyFileSync(src, dst);
+        console.log(`[DATA] 마이그레이션: ${fn} → ${DATA_DIR}`);
+      } catch (e) {
+        console.error(`[DATA] 마이그레이션 실패 (${fn}):`, e.message);
+      }
+    }
+  }
+}
 
 const loadJSON = (file, fallback) => {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
