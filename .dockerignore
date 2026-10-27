@@ -1,0 +1,32 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+.git
+.gitignore
+.github
+
+# 로컬 데이터 (Volume에서 새로 생김)
+schedules.json
+send_log.json
+user_config.json
+users.json
+*.json.tmp
+
+# 로그
+*.log
+
+# 빌드 스크립트 (PPT)
+build_*.js
+*.pptx
+unpacked*/
+SlackScheduler*
+
+# 문서
+*.md
+README.md
+
+# IDE
+.vscode
+.idea
+.claude

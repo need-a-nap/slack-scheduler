@@ -49,6 +49,7 @@ try {
 const DATA_FILE = path.join(DATA_DIR, 'schedules.json');
 const LOG_FILE = path.join(DATA_DIR, 'send_log.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const HOLIDAYS_FILE = path.join(DATA_DIR, 'holidays.json');
 const OLD_USER_CONFIG_FILE = path.join(DATA_DIR, 'user_config.json');
 
 // 일회성 마이그레이션: DATA_DIR이 새로 지정되어 있고 그 안에 데이터가 없지만
@@ -80,10 +81,12 @@ const saveJSON = (file, data) => {
 let schedules = loadJSON(DATA_FILE, []);
 let sendLog = loadJSON(LOG_FILE, []);
 let users = loadJSON(USERS_FILE, {}); // { [userId]: { userId, userName, userAvatar, userToken, sessionToken, ... } }
+let customHolidays = loadJSON(HOLIDAYS_FILE, []); // ["YYYY-MM-DD", ...] — 회사 쉬는 날 사용자 지정
 
 const persistSchedules = () => saveJSON(DATA_FILE, schedules);
 const persistLog = () => saveJSON(LOG_FILE, sendLog.slice(-500));
 const persistUsers = () => saveJSON(USERS_FILE, users);
+const persistHolidays = () => saveJSON(HOLIDAYS_FILE, customHolidays);
 
 // ───── Migration (v3 → v4) ────────────────────────────────────
 (function migrate() {
@@ -217,10 +220,67 @@ function getClientForUser(user, senderType) {
   return slack;
 }
 
+// ───── 공휴일 / 영업일 계산 ───────────────────────────────────
+// 한국 공휴일 기본 데이터 (2026-2028). 필요 시 수정하거나 UI로 추가 가능.
+const DEFAULT_HOLIDAYS = [
+  // 2026
+  '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18',
+  '2026-03-01', '2026-03-02', '2026-05-05', '2026-05-24',
+  '2026-05-25', '2026-06-06', '2026-08-15', '2026-08-17',
+  '2026-09-24', '2026-09-25', '2026-09-26', '2026-10-03',
+  '2026-10-05', '2026-10-09', '2026-12-25',
+  // 2027
+  '2027-01-01', '2027-02-06', '2027-02-07', '2027-02-08',
+  '2027-02-09', '2027-03-01', '2027-05-05', '2027-05-13',
+  '2027-06-06', '2027-06-07', '2027-08-15', '2027-08-16',
+  '2027-09-14', '2027-09-15', '2027-09-16', '2027-10-03',
+  '2027-10-04', '2027-10-09', '2027-10-11', '2027-12-25',
+  // 2028
+  '2028-01-01', '2028-01-26', '2028-01-27', '2028-01-28',
+  '2028-03-01', '2028-05-02', '2028-05-05', '2028-06-06',
+  '2028-08-15', '2028-10-02', '2028-10-03', '2028-10-04',
+  '2028-10-09', '2028-12-25',
+];
+
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function getHolidaySet() {
+  return new Set([...DEFAULT_HOLIDAYS, ...customHolidays]);
+}
+
+function isBusinessDay(date, holidaySet) {
+  const day = date.getDay();
+  if (day === 0 || day === 6) return false;
+  return !holidaySet.has(toISODate(date));
+}
+
+// start 날짜로부터 n 영업일 뒤 (주말·공휴일 skip)
+function addBusinessDays(start, n) {
+  const holidays = getHolidaySet();
+  const d = new Date(start);
+  d.setHours(0, 0, 0, 0);
+  let added = 0;
+  while (added < n) {
+    d.setDate(d.getDate() + 1);
+    if (isBusinessDay(d, holidays)) added++;
+  }
+  return d;
+}
+
+function formatMD(date) {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
 // ───── 개인화 변수 치환 ──────────────────────────────────────
-// {이름}    → 받는 사람 이름 (DM)
-// {이름만}  → 첫 글자 제거 후 '_' 앞까지 (예: 홍길동_팀 → 길동, 김별 → 별)
-// {name}    → 영문 alias for {이름}
+// {이름}       → 받는 사람 이름 (DM)
+// {이름만}     → 첫 글자 제거 후 '_' 앞까지 (예: 홍길동_팀 → 길동, 김별 → 별)
+// {name}       → 영문 alias for {이름}
+// {영업일+N}   → 발송 시점 기준 N 영업일 뒤 날짜를 M/D 형식으로 (주말·공휴일 skip)
 function extractShortName(fullName) {
   if (!fullName) return '';
   const afterFirst = fullName.slice(1);
@@ -228,18 +288,25 @@ function extractShortName(fullName) {
   return underscoreIdx >= 0 ? afterFirst.slice(0, underscoreIdx) : afterFirst;
 }
 
-function personalize(text, target) {
+function personalize(text, target, now = new Date()) {
   if (!text) return text;
+
+  // 1. 영업일 변수 (대상 무관)
+  let result = text.replace(/\{영업일\+(\d+)\}/g, (_, n) => {
+    const d = addBusinessDays(now, parseInt(n, 10));
+    return formatMD(d);
+  });
+
+  // 2. 이름 변수 (DM만)
   if (target?.type === 'user') {
     const name = target.name || '';
     const shortName = extractShortName(name);
-    return text
+    return result
       .replace(/\{이름만\}/g, shortName)
       .replace(/\{이름\}/g, name)
       .replace(/\{name\}/gi, name);
   }
-  // 채널: 변수가 있으면 빈 문자열로 대체 (실수 노출 방지)
-  return text
+  return result
     .replace(/\{이름만\}/g, '')
     .replace(/\{이름\}/g, '')
     .replace(/\{name\}/gi, '');
@@ -353,6 +420,45 @@ app.post('/api/auth/logout', (req, res) => {
   }
   res.clearCookie(SESSION_COOKIE);
   res.json({ ok: true });
+});
+
+// ───── 공휴일 관리 ──────────────────────────────────────────
+// 미리보기용: 영업일+N 변수를 지금 계산해보기
+app.get('/api/preview-businessday', requireAuth, (req, res) => {
+  const n = parseInt(req.query.n, 10);
+  if (!Number.isFinite(n) || n < 0 || n > 365) {
+    return res.status(400).json({ error: 'n은 0~365 사이의 숫자' });
+  }
+  const d = addBusinessDays(new Date(), n);
+  res.json({ n, iso: toISODate(d), md: formatMD(d) });
+});
+
+app.get('/api/holidays', requireAuth, (req, res) => {
+  res.json({
+    defaults: DEFAULT_HOLIDAYS,
+    custom: customHolidays,
+    all: [...new Set([...DEFAULT_HOLIDAYS, ...customHolidays])].sort(),
+  });
+});
+
+app.post('/api/holidays', requireAuth, (req, res) => {
+  const { date } = req.body || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'YYYY-MM-DD 형식으로 입력해주세요.' });
+  }
+  if (!customHolidays.includes(date)) {
+    customHolidays.push(date);
+    customHolidays.sort();
+    persistHolidays();
+  }
+  res.json({ ok: true, custom: customHolidays });
+});
+
+app.delete('/api/holidays/:date', requireAuth, (req, res) => {
+  const before = customHolidays.length;
+  customHolidays = customHolidays.filter((d) => d !== req.params.date);
+  if (customHolidays.length !== before) persistHolidays();
+  res.json({ ok: true, custom: customHolidays });
 });
 
 // ───── Slack lists (auth required) ───────────────────────────

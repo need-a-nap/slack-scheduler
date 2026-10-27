@@ -1,0 +1,30 @@
+# Fly.io 배포 설정 — slack-scheduler
+app = "slack-scheduler-hs"
+primary_region = "nrt"  # 도쿄 (한국에서 가까움)
+
+[build]
+  # Dockerfile 사용
+
+[env]
+  PORT = "3000"
+  TZ = "Asia/Seoul"
+  DATA_DIR = "/data"
+
+# 영구 디스크 마운트 (예약·사용자 데이터 보존)
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # cron이 매분 돌아야 하므로 24시간 켜둠
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
