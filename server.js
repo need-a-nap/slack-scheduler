@@ -628,7 +628,7 @@ app.post('/api/test-send', requireAuth, async (req, res) => {
       const personalText = personalize(messageText || '(내용 없음)', t);
       await client.chat.postMessage({
         channel: t.id,
-        text: `🧪 *테스트 메시지*\n${personalText}`,
+        text: personalText,
       });
       results.push({ target: t.name, success: true });
     } catch (err) {
