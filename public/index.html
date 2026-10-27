@@ -1259,7 +1259,7 @@
                       onBlur={() => setTimeout(() => setMentionState(null), 200)}
                       className="shadow-sm focus:ring-pink-500 focus:border-pink-500 block w-full sm:text-sm border-gray-700 bg-gray-950 text-white rounded-b-lg p-3 border border-t-0 placeholder-gray-600 focus:rounded-t-none leading-relaxed"
                       style={{ minHeight: '240px', maxHeight: '600px', resize: 'vertical', overflow: 'auto' }}
-                      placeholder={'여기에 메시지를 입력하세요.\n\n💡 받는 사람마다 다르게 보내고 싶다면 {이름} 을 사용하세요.\n   예) "안녕하세요 {이름}님, 오늘 회의 잊지 마세요!"\n   → DM 발송 시 받는 사람이 슬랙에 설정해둔 이름(표시 이름)으로 자동 치환됩니다.\n\n📅 매번 날짜가 바뀌는 메시지는 {영업일+N} 을 사용하세요.\n   예) "{영업일+3} 점심식사 신청이 1시간 남았습니다"\n   → 발송 시점 기준 N 영업일 후 날짜(M/D)로 치환, 주말·공휴일은 자동으로 건너뜁니다.\n\n@ 를 입력하면 슬랙 멤버를 멘션할 수 있습니다.\n위 도구로 *굵게*, _기울임_, ~취소선~, `코드`, 링크 등을 적용할 수 있어요.'}
+                      placeholder={'여기에 메시지를 입력하세요.\n\n💡 받는 사람마다 다르게 보내고 싶다면 {이름} 을 사용하세요.\n   예) "안녕하세요 {이름}님, 오늘 회의 잊지 마세요!"\n   → DM 발송 시 받는 사람이 슬랙에 설정해둔 이름(표시 이름)으로 자동 치환됩니다.\n\n📅 매번 날짜가 바뀌는 메시지는 {영업일+N} 을 사용하세요.\n   예) "{영업일+3} 점심식사 신청이 1시간 남았습니다"\n   → 발송 시점 기준 N 영업일 후 날짜 (예: 11/27 금요일)로 치환, 주말·공휴일은 자동으로 건너뜁니다.\n\n@ 를 입력하면 슬랙 멤버를 멘션할 수 있습니다.\n위 도구로 *굵게*, _기울임_, ~취소선~, `코드`, 링크 등을 적용할 수 있어요.'}
                     />
 
                     {/* @멘션 드롭다운 */}
@@ -1301,7 +1301,7 @@
                     💡 <code className="bg-indigo-900/40 text-indigo-300 px-1 rounded">{'{이름}'}</code> → DM 받는 사람이 슬랙에 설정한 표시 이름으로 자동 치환 <span className="text-gray-600">(채널 발송 시 빈 값)</span>
                   </p>
                   <p>
-                    📅 <code className="bg-emerald-900/40 text-emerald-300 px-1 rounded">{'{영업일+N}'}</code> → 발송 시점 기준 N 영업일 후 날짜(M/D)로 치환. 주말·공휴일 자동 skip. <button type="button" onClick={() => setShowHolidayModal(true)} className="underline text-emerald-400 hover:text-emerald-300 ml-1">공휴일 관리</button>
+                    📅 <code className="bg-emerald-900/40 text-emerald-300 px-1 rounded">{'{영업일+N}'}</code> → 발송 시점 기준 N 영업일 후 날짜(예: 11/27 금요일)로 치환. 주말·공휴일 자동 skip. <button type="button" onClick={() => setShowHolidayModal(true)} className="underline text-emerald-400 hover:text-emerald-300 ml-1">공휴일 관리</button>
                   </p>
                 </div>
 

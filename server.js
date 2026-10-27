@@ -272,8 +272,9 @@ function addBusinessDays(start, n) {
   return d;
 }
 
+const DAY_NAMES = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
 function formatMD(date) {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  return `${date.getMonth() + 1}/${date.getDate()} ${DAY_NAMES[date.getDay()]}`;
 }
 
 // ───── 개인화 변수 치환 ──────────────────────────────────────
